@@ -31,12 +31,30 @@ public static class TrapAttribution
         }
     }
 
+    // Diagnostic logging toggle. Flip to true to spam the log with per-damage-tick info
+    // for debugging. Default false - the "Trap kill" summary per death is still logged
+    // unconditionally in TrapXPAward so you can see the mod doing its thing without the noise.
+    public const bool Debug = false;
+
     public static void DamageEntityPrefix(EntityAlive __instance, DamageSource _damageSource)
     {
         try
         {
             if (__instance == null || _damageSource == null) return;
             if (__instance.entityType != EntityType.Zombie) return;
+
+            var blockPos = _damageSource.BlockPosition;
+            var hasBlockPos = blockPos != Vector3i.zero;
+
+            // Only log damage we think came from a block (BlockPosition set). Otherwise we'd
+            // spam on every player melee hit to a zombie.
+            if (Debug && hasBlockPos)
+            {
+                var world = GameManager.Instance?.World;
+                var te = world?.GetTileEntity(0, blockPos);
+                var tracked = TrapOwnership.GetOwnerEntityId(blockPos);
+                Log.Out($"[KitsuneTrapXP.debug] zombie {__instance.entityId} hit from block {blockPos}: te={te?.GetType().Name ?? "none"}, trackedOwner={tracked}, srcEntityId={_damageSource.getEntityId()}");
+            }
 
             var ownerId = ResolveTrapOwner(_damageSource);
             if (ownerId <= 0) return;
@@ -45,6 +63,9 @@ public static class TrapAttribution
             {
                 _trapDamageByZombie[__instance.entityId] = ownerId;
             }
+
+            if (Debug)
+                Log.Out($"[KitsuneTrapXP.debug] Stamped zombie {__instance.entityId} with trap owner {ownerId}");
         }
         catch (System.Exception ex)
         {

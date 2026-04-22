@@ -1,12 +1,21 @@
 using HarmonyLib;
 
 /// <summary>
-/// On zombie death, if a trap owner is on record, award them 100% of the zombie's XP
-/// plus an Advanced Engineering bonus, and trigger vanilla party share.
+/// On zombie death with a trap-attributed owner, send a NetPackageSharedPartyKill to the
+/// owner's client. That package triggers SharedKillClient which:
+///   - AddLevelExp(notifyUI: true) - animates the XP bar
+///   - Shows the "+N XP" tooltip on the right side of the screen
+///   - Fires QuestEventManager.EntityKilled for quest tracking
 ///
-/// Baseline is 1.0x (100% XP). AE bonus is read from the ElectricalTrapXP cvar on the
-/// owner's buffs, which is bumped to 0.2/0.4/0.6/0.8/1.0 by perkAdvancedEngineering
-/// (see Config/progression.xml). So rank 0 = 1.0x, rank 5 = 2.0x.
+/// This is the only package vanilla has that's wired to update the client's UI with XP on
+/// a kill. NetPackageEntityAwardKillServer sounds like it should but only does quest events.
+///
+/// We also set entityThatKilledMe so vanilla's own kill log + AwardKill flow sees correct
+/// attribution (harmless if redundant with our package, catches any code paths we missed).
+///
+/// AE bonus: read from ElectricalTrapXP cvar on the owner's buffs. Baseline 1.0 + bonus.
+/// progression.xml patch raises the cvar to 0.2/0.4/0.6/0.8/1.0 for the 5 AE ranks, so
+/// rank 0 gets 100% XP, rank 5 gets 200% XP (double).
 /// </summary>
 public static class TrapXPAward
 {
@@ -17,8 +26,10 @@ public static class TrapXPAward
         var m = AccessTools.Method(typeof(EntityAlive), "OnEntityDeath");
         if (m != null)
         {
-            harmony.Patch(m, postfix: new HarmonyMethod(
-                AccessTools.Method(typeof(TrapXPAward), nameof(OnEntityDeathPostfix))));
+            // Prefix so we can set entityThatKilledMe before vanilla's kill flow reads it,
+            // and so we send the XP package before the zombie's entityId becomes stale.
+            harmony.Patch(m, prefix: new HarmonyMethod(
+                AccessTools.Method(typeof(TrapXPAward), nameof(OnEntityDeathPrefix))));
         }
         else
         {
@@ -26,7 +37,7 @@ public static class TrapXPAward
         }
     }
 
-    public static void OnEntityDeathPostfix(EntityAlive __instance)
+    public static void OnEntityDeathPrefix(EntityAlive __instance)
     {
         try
         {
@@ -42,7 +53,7 @@ public static class TrapXPAward
             var owner = world.GetEntity(ownerId) as EntityPlayer;
             if (owner == null) return;
 
-            // Baseline 1.0 (100%) + AE bonus cvar (0.0 at rank 0, up to 1.0 at rank 5).
+            // Baseline 100% + AE bonus.
             float aeBonus = 0f;
             try { aeBonus = owner.Buffs.GetCustomVar(AECvar); } catch { aeBonus = 0f; }
             float xpMultiplier = 1.0f + aeBonus;
@@ -51,22 +62,38 @@ public static class TrapXPAward
             int awarded = (int)(baseXp * xpMultiplier + 0.5f);
             if (awarded < 1) awarded = 1;
 
-            owner.Progression.AddLevelExp(awarded, "_xpFromKill", Progression.XPTypes.Kill, useBonus: true);
-            owner.bPlayerStatsChanged = true;
+            // Stamp the killer on the zombie so vanilla's own kill log + quest packet see it.
+            __instance.entityThatKilledMe = owner;
 
-            Log.Out($"[KitsuneTrapXP] Trap kill: {__instance.EntityName} killed by {owner.EntityName}'s trap, " +
-                    $"base={baseXp} xMult={xpMultiplier:F2} awarded={awarded}.");
+            // Send NetPackageSharedPartyKill to the trap owner's client. This is the
+            // package that actually triggers AddLevelExp(notifyUI:true) + tooltip client-side.
+            try
+            {
+                var pkg = NetPackageManager.GetPackage<NetPackageSharedPartyKill>()
+                    .Setup(__instance.entityClass, awarded, owner.entityId, __instance.entityId);
+                SingletonMonoBehaviour<ConnectionManager>.Instance.SendPackage(
+                    pkg,
+                    _onlyClientsAttachedToAnEntity: false,
+                    _attachedToEntityId: owner.entityId);
+            }
+            catch (System.Exception ex)
+            {
+                Log.Warning($"[KitsuneTrapXP] Failed to send SharedPartyKill to owner: {ex.Message}");
+            }
 
-            // Vanilla party share: recomputes ExperienceValue * xpModifier and distributes
-            // to party members within PartySharedKillRange, applying the 10% party penalty.
+            // Party share - vanilla's SharedKillServer distributes to OTHER party members
+            // within PartySharedKillRange, applying the 10% party penalty.
             if (owner.IsInParty())
             {
                 GameManager.Instance.SharedKillServer(__instance.entityId, ownerId, xpMultiplier);
             }
+
+            Log.Out($"[KitsuneTrapXP] Trap kill: {__instance.EntityName} → {owner.EntityName} " +
+                    $"(base={baseXp} xMult={xpMultiplier:F2} awarded={awarded}).");
         }
         catch (System.Exception ex)
         {
-            Log.Warning($"[KitsuneTrapXP] OnEntityDeathPostfix failed: {ex.Message}");
+            Log.Warning($"[KitsuneTrapXP] OnEntityDeathPrefix failed: {ex.Message}");
         }
     }
 }

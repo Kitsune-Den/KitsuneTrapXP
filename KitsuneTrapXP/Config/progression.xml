@@ -3,6 +3,12 @@
 		Advanced Engineering's ElectricalTrapXP no longer gates trap kill XP — the DLL gives
 		100% baseline for all traps. Instead, it's now a bonus multiplier on top of baseline.
 		Values: rank 0 = +0% (100% total), rank 5 = +100% (200% total, aka double XP).
+
+		We use remove+append instead of <set xpath="...@value"> because that attribute-set
+		syntax has been reported to fail on some 7D2D versions. remove+append always works.
 	-->
-	<set xpath="/progression/perk[@name='perkAdvancedEngineering']//passive_effect[@name='ElectricalTrapXP']/@value">.2,.4,.6,.8,1.0</set>
+	<remove xpath="/progression/perk[@name='perkAdvancedEngineering']/effect_group/passive_effect[@name='ElectricalTrapXP']"/>
+	<append xpath="/progression/perk[@name='perkAdvancedEngineering']/effect_group">
+		<passive_effect name="ElectricalTrapXP" operation="base_set" level="1,2,3,4,5" value=".2,.4,.6,.8,1.0"/>
+	</append>
 </config>

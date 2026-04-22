@@ -19,39 +19,125 @@ public static class TrapOwnership
 
     public static void RegisterPatches(Harmony harmony)
     {
-        var m1 = AccessTools.Method(typeof(World), "SetBlockRPC",
-            new[] { typeof(int), typeof(Vector3i), typeof(BlockValue), typeof(int) });
-        var m2 = AccessTools.Method(typeof(World), "SetBlockRPC",
-            new[] { typeof(int), typeof(Vector3i), typeof(BlockValue), typeof(sbyte), typeof(int) });
+        // Primary hook: GameManager.ChangeBlocks — deepest funnel for all block changes on
+        // the server side. Player-placed blocks arrive as NetPackageSetBlock → ChangeBlocks.
+        // BlockChangeInfo carries changedByEntityId + pos + blockValue natively.
+        var m = AccessTools.Method(typeof(GameManager), "ChangeBlocks",
+            new[] { typeof(PlatformUserIdentifierAbs), typeof(List<BlockChangeInfo>) });
+        if (m != null)
+        {
+            harmony.Patch(m, postfix: new HarmonyMethod(
+                AccessTools.Method(typeof(TrapOwnership), nameof(ChangeBlocksPostfix))));
+            Log.Out("[KitsuneTrapXP] Patched GameManager.ChangeBlocks");
+        }
+        else
+        {
+            Log.Warning("[KitsuneTrapXP] GameManager.ChangeBlocks not found - spike trap ownership tracking disabled.");
+        }
 
-        var postfix = new HarmonyMethod(AccessTools.Method(typeof(TrapOwnership), nameof(SetBlockRPCPostfix)));
-        if (m1 != null) harmony.Patch(m1, postfix: postfix);
-        if (m2 != null) harmony.Patch(m2, postfix: postfix);
-
-        if (m1 == null && m2 == null)
-            Log.Warning("[KitsuneTrapXP] World.SetBlockRPC not found - spike trap ownership tracking disabled.");
+        // Fallback hook: NetPackageSetBlock.ProcessPackage — catches player block placements
+        // at the network-receive layer. Redundant when ChangeBlocks works, but if Harmony
+        // has trouble binding to the generic-arg signature of ChangeBlocks, this still fires.
+        var np = AccessTools.Method(typeof(NetPackageSetBlock), "ProcessPackage",
+            new[] { typeof(World), typeof(GameManager) });
+        if (np != null)
+        {
+            harmony.Patch(np, prefix: new HarmonyMethod(
+                AccessTools.Method(typeof(TrapOwnership), nameof(NetPackageSetBlockPrefix))));
+            Log.Out("[KitsuneTrapXP] Patched NetPackageSetBlock.ProcessPackage");
+        }
     }
 
-    public static void SetBlockRPCPostfix(Vector3i _blockPos, BlockValue _blockValue, int _changingEntityId)
+    /// <summary>
+    /// Prefix on NetPackageSetBlock.ProcessPackage. Reads persistentPlayerId + blockChanges
+    /// fields via reflection, then calls into the same logic as ChangeBlocksPostfix.
+    /// Doesn't skip the original (returns void).
+    /// </summary>
+    private static readonly System.Reflection.FieldInfo _npPersistentPlayerId =
+        typeof(NetPackageSetBlock).GetField("persistentPlayerId",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+    private static readonly System.Reflection.FieldInfo _npBlockChanges =
+        typeof(NetPackageSetBlock).GetField("blockChanges",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+    public static void NetPackageSetBlockPrefix(NetPackageSetBlock __instance)
     {
         try
         {
-            if (_changingEntityId <= 0) return;
-            var block = _blockValue.Block;
-            if (block == null) return;
+            if (TrapAttribution.Debug)
+                Log.Out("[KitsuneTrapXP.debug] NetPackageSetBlock.ProcessPackage fired");
 
-            if (IsTrapBlock(block))
-            {
-                lock (_lock) { _ownerByPos[_blockPos] = _changingEntityId; }
-            }
-            else
-            {
-                lock (_lock) { _ownerByPos.Remove(_blockPos); }
-            }
+            if (_npPersistentPlayerId == null || _npBlockChanges == null) return;
+
+            var pid = _npPersistentPlayerId.GetValue(__instance) as PlatformUserIdentifierAbs;
+            var changes = _npBlockChanges.GetValue(__instance) as List<BlockChangeInfo>;
+            if (changes == null) return;
+
+            RecordPlacements(pid, changes);
         }
         catch (System.Exception ex)
         {
-            Log.Warning($"[KitsuneTrapXP] SetBlockRPCPostfix failed at {_blockPos}: {ex.Message}");
+            Log.Warning($"[KitsuneTrapXP] NetPackageSetBlockPrefix failed: {ex.Message}");
+        }
+    }
+
+    public static void ChangeBlocksPostfix(PlatformUserIdentifierAbs persistentPlayerId, List<BlockChangeInfo> _blocksToChange)
+    {
+        try
+        {
+            if (TrapAttribution.Debug)
+                Log.Out($"[KitsuneTrapXP.debug] ChangeBlocks fired: changes={_blocksToChange?.Count ?? -1}, persistentId={persistentPlayerId?.ToString() ?? "null"}");
+            RecordPlacements(persistentPlayerId, _blocksToChange);
+        }
+        catch (System.Exception ex)
+        {
+            Log.Warning($"[KitsuneTrapXP] ChangeBlocksPostfix failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>Shared placement-tracking logic called from either ChangeBlocks postfix or NetPackageSetBlock prefix.</summary>
+    private static void RecordPlacements(PlatformUserIdentifierAbs persistentPlayerId, List<BlockChangeInfo> changes)
+    {
+        if (changes == null) return;
+
+        int fallbackEntityId = -1;
+        var gm = GameManager.Instance;
+        if (gm != null && persistentPlayerId != null)
+        {
+            var ppd = gm.GetPersistentPlayerList()?.GetPlayerData(persistentPlayerId);
+            if (ppd != null) fallbackEntityId = ppd.EntityId;
+        }
+
+        foreach (var change in changes)
+        {
+            if (TrapAttribution.Debug)
+            {
+                var bName = change.blockValue.Block?.GetBlockName() ?? "null";
+                Log.Out($"[KitsuneTrapXP.debug]   change: pos={change.pos} block={bName} bChangeBlockValue={change.bChangeBlockValue} changedByEntityId={change.changedByEntityId} fallback={fallbackEntityId}");
+            }
+
+            if (!change.bChangeBlockValue) continue;
+
+            var block = change.blockValue.Block;
+            if (block == null) continue;
+
+            var entityId = change.changedByEntityId > 0 ? change.changedByEntityId : fallbackEntityId;
+            if (entityId <= 0) continue;
+
+            var isTrap = IsTrapBlock(block);
+            if (TrapAttribution.Debug)
+                Log.Out($"[KitsuneTrapXP.debug]   → block={block.GetBlockName()} isTrap={isTrap}");
+
+            if (isTrap)
+            {
+                lock (_lock) { _ownerByPos[change.pos] = entityId; }
+                if (TrapAttribution.Debug)
+                    Log.Out($"[KitsuneTrapXP.debug] Tracked trap placement: {block.GetBlockName()} at {change.pos} by entity {entityId}");
+            }
+            else
+            {
+                lock (_lock) { _ownerByPos.Remove(change.pos); }
+            }
         }
     }
 
@@ -66,6 +152,22 @@ public static class TrapOwnership
     public static bool IsTrapBlock(Block block)
     {
         if (block == null) return false;
+
+        // Primary: name-prefix match. Covers trapSpikesIronDmg0-3, trapSpikesWoodDmg0-3,
+        // trapSpikesScrapIronMaster, barbedFence, barbedWire, etc. In 2.x the non-tile-entity
+        // trap blocks all use these prefixes, and TFP doesn't tag them with trapsSkill.
+        var name = block.GetBlockName();
+        if (!string.IsNullOrEmpty(name))
+        {
+            if (name.StartsWith("trap", System.StringComparison.OrdinalIgnoreCase)
+                || name.StartsWith("barbed", System.StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        // Fallback: trapsSkill tag. Covers electrical traps (blade, dart, turrets) and any
+        // future trap blocks TFP decides to tag. Tile-entity traps are read directly via
+        // TileEntityPoweredMeleeTrap/RangedTrap at attribution time so they don't strictly
+        // need to hit this tracker, but catching them here is harmless defense-in-depth.
         return block.HasAnyFastTags(FastTags<TagGroup.Global>.Parse(TrapsTag));
     }
 }
