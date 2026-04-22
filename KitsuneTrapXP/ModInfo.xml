@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xml>
+    <Name value="KitsuneTrapXP" />
+    <DisplayName value="Kitsune Trap XP" />
+    <Version value="0.1.0" />
+    <Description value="Trap kills give 100% XP to the trap owner by default - no perk required. Covers spike traps, barbed fence, blade traps, dart traps, and turrets. Advanced Engineering becomes a bonus on top. Party-shared via vanilla PartySharedKillRange. Server-side only, EAC off required." />
+    <Author value="AdaInTheLab" />
+    <Website value="https://github.com/Kitsune-Den/KitsuneTrapXP" />
+</xml>

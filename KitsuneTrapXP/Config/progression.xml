@@ -1,0 +1,8 @@
+<config>
+	<!--
+		Advanced Engineering's ElectricalTrapXP no longer gates trap kill XP — the DLL gives
+		100% baseline for all traps. Instead, it's now a bonus multiplier on top of baseline.
+		Values: rank 0 = +0% (100% total), rank 5 = +100% (200% total, aka double XP).
+	-->
+	<set xpath="/progression/perk[@name='perkAdvancedEngineering']//passive_effect[@name='ElectricalTrapXP']/@value">.2,.4,.6,.8,1.0</set>
+</config>
