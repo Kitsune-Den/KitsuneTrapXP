@@ -1,5 +1,12 @@
 # KitsuneTrapXP
 
+🦊 **Part of the [Kitsune Systems Collection](https://github.com/Kitsune-Den)** —
+[KitsunePvPExtended](https://github.com/Kitsune-Den/KitsunePvPExtended) ·
+[KitsuneZombieReach](https://github.com/Kitsune-Den/KitsuneZombieReach) ·
+[KitsuneKitchen7D](https://github.com/Kitsune-Den/KitsuneKitchen7D) ·
+[KitsuneFuelSaver](https://github.com/Kitsune-Den/KitsuneFuelSaver) ·
+[KitsuneFoxacary](https://github.com/Kitsune-Den/KitsuneFoxacary)
+
 ![KitsuneTrapXP](kitsune-trap-xp.jpg)
 
 **Trap kills give 100% XP to the trap owner. No perk required. Party-shared. For 7 Days to Die 2.6.**
