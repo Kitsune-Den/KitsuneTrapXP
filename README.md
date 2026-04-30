@@ -1,6 +1,6 @@
 # KitsuneTrapXP
 
-🦊 **Part of the [Kitsune Systems Collection](https://github.com/Kitsune-Den)** —
+🦊 **Part of the [Kitsune Systems Collection](https://github.com/Kitsune-Den)** ~
 [KitsunePvPExtended](https://github.com/Kitsune-Den/KitsunePvPExtended) ·
 [KitsuneZombieReach](https://github.com/Kitsune-Den/KitsuneZombieReach) ·
 [KitsuneKitchen7D](https://github.com/Kitsune-Den/KitsuneKitchen7D) ·
@@ -36,10 +36,10 @@ Done. Clients can connect normally, they don't need the mod.
 
 Under the hood it's four Harmony patches and one XML tweak:
 
-- **Block placement tracking** — `GameManager.ChangeBlocks` postfix + `NetPackageSetBlock.ProcessPackage` prefix (belt-and-suspenders). When you place a spike trap, barbed fence, or any other trap block, the mod records your entity ID as the owner at that block position. Tile-entity traps (blade, dart, turrets) already track their own owner in vanilla, so those read directly at kill time.
-- **Damage attribution** — `EntityAlive.DamageEntity` prefix. When a zombie takes damage from a trap block, the mod stamps it with the trap owner's entity ID. Last trap to hit wins if multiple people's traps damaged the same zombie.
-- **XP on death** — `EntityAlive.OnEntityDeath` prefix. When a stamped zombie dies, the mod sends a `NetPackageSharedPartyKill` to the owner's client with `ExperienceValue × (1.0 + AE_bonus)`. That's the package vanilla uses for party-shared XP, and it's the only packet wired to animate the XP bar + pop the "+N XP" tooltip client-side. Party members within range get their share too via vanilla's `SharedKillServer`.
-- **XML patch** — Advanced Engineering's `ElectricalTrapXP` cvar values change from `.15/.3/.45/.6/.75` to `.2/.4/.6/.8/1.0`. Rank 0 = +0% (100% total), rank 5 = +100% (200% total, aka double XP).
+- **Block placement tracking** ~ `GameManager.ChangeBlocks` postfix + `NetPackageSetBlock.ProcessPackage` prefix (belt-and-suspenders). When you place a spike trap, barbed fence, or any other trap block, the mod records your entity ID as the owner at that block position. Tile-entity traps (blade, dart, turrets) already track their own owner in vanilla, so those read directly at kill time.
+- **Damage attribution** ~ `EntityAlive.DamageEntity` prefix. When a zombie takes damage from a trap block, the mod stamps it with the trap owner's entity ID. Last trap to hit wins if multiple people's traps damaged the same zombie.
+- **XP on death** ~ `EntityAlive.OnEntityDeath` prefix. When a stamped zombie dies, the mod sends a `NetPackageSharedPartyKill` to the owner's client with `ExperienceValue × (1.0 + AE_bonus)`. That's the package vanilla uses for party-shared XP, and it's the only packet wired to animate the XP bar + pop the "+N XP" tooltip client-side. Party members within range get their share too via vanilla's `SharedKillServer`.
+- **XML patch** ~ Advanced Engineering's `ElectricalTrapXP` cvar values change from `.15/.3/.45/.6/.75` to `.2/.4/.6/.8/1.0`. Rank 0 = +0% (100% total), rank 5 = +100% (200% total, aka double XP).
 
 ## What it does NOT do
 
