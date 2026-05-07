@@ -65,20 +65,39 @@ public static class TrapXPAward
             // Stamp the killer on the zombie so vanilla's own kill log + quest packet see it.
             __instance.entityThatKilledMe = owner;
 
-            // Send NetPackageSharedPartyKill to the trap owner's client. This is the
-            // package that actually triggers AddLevelExp(notifyUI:true) + tooltip client-side.
+            // Deliver XP to the trap owner.
+            //
+            // SP/host: NetPackageSharedPartyKill doesn't deliver to the host's own client
+            // (SendPackage targets remote clients only, and ProcessPackage's UI path doesn't
+            // fire reliably when invoked locally). Award XP directly through Progression.
+            //
+            // Dedicated server: owner is a remote client, send the packet over the wire so
+            // the client-side handler (AddLevelExp + "+N XP" tooltip) runs there.
             try
             {
-                var pkg = NetPackageManager.GetPackage<NetPackageSharedPartyKill>()
-                    .Setup(__instance.entityClass, awarded, owner.entityId, __instance.entityId);
-                SingletonMonoBehaviour<ConnectionManager>.Instance.SendPackage(
-                    pkg,
-                    _onlyClientsAttachedToAnEntity: false,
-                    _attachedToEntityId: owner.entityId);
+                if (owner is EntityPlayerLocal localOwner && localOwner.Progression != null)
+                {
+                    localOwner.Progression.AddLevelExp(
+                        awarded,
+                        "_xpFromKilling",
+                        Progression.XPTypes.Kill,
+                        true,    // useBonus
+                        true,    // notifyUI
+                        ownerId);
+                }
+                else
+                {
+                    var pkg = NetPackageManager.GetPackage<NetPackageSharedPartyKill>()
+                        .Setup(__instance.entityClass, awarded, owner.entityId, __instance.entityId);
+                    SingletonMonoBehaviour<ConnectionManager>.Instance.SendPackage(
+                        pkg,
+                        _onlyClientsAttachedToAnEntity: true,
+                        _attachedToEntityId: owner.entityId);
+                }
             }
             catch (System.Exception ex)
             {
-                Log.Warning($"[KitsuneTrapXP] Failed to send SharedPartyKill to owner: {ex.Message}");
+                Log.Warning($"[KitsuneTrapXP] Failed to award trap XP to owner: {ex.Message}");
             }
 
             // Party share - vanilla's SharedKillServer distributes to OTHER party members
