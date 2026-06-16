@@ -83,7 +83,8 @@ public static class TrapXPAward
                         Progression.XPTypes.Kill,
                         true,    // useBonus
                         true,    // notifyUI
-                        ownerId);
+                        ownerId,
+                        null);   // _itemValue — 7th arg added in v3.0
                 }
                 else
                 {
