@@ -51,7 +51,7 @@ public static class TrapAttribution
             if (Debug && hasBlockPos)
             {
                 var world = GameManager.Instance?.World;
-                var te = world?.GetTileEntity(0, blockPos);
+                var te = world?.GetTileEntity(blockPos);
                 var tracked = TrapOwnership.GetOwnerEntityId(blockPos);
                 Log.Out($"[KitsuneTrapXP.debug] zombie {__instance.entityId} hit from block {blockPos}: te={te?.GetType().Name ?? "none"}, trackedOwner={tracked}, srcEntityId={_damageSource.getEntityId()}");
             }
@@ -86,7 +86,7 @@ public static class TrapAttribution
         if (blockPos == Vector3i.zero) return -1;
 
         // 1. Tile-entity traps: ask the tile entity for its owner.
-        var te = world.GetTileEntity(0, blockPos);
+        var te = world.GetTileEntity(blockPos);
         if (te is TileEntityPoweredMeleeTrap meleeTrap)
             return meleeTrap.OwnerEntityID;
         if (te is TileEntityPoweredRangedTrap rangedTrap)

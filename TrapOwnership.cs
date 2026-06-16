@@ -113,7 +113,7 @@ public static class TrapOwnership
             if (TrapAttribution.Debug)
             {
                 var bName = change.blockValue.Block?.GetBlockName() ?? "null";
-                Log.Out($"[KitsuneTrapXP.debug]   change: pos={change.pos} block={bName} bChangeBlockValue={change.bChangeBlockValue} changedByEntityId={change.changedByEntityId} fallback={fallbackEntityId}");
+                Log.Out($"[KitsuneTrapXP.debug]   change: pos={change.blockValueRef.BlockPosition} block={bName} bChangeBlockValue={change.bChangeBlockValue} changedByEntityId={change.changedByEntityId} fallback={fallbackEntityId}");
             }
 
             if (!change.bChangeBlockValue) continue;
@@ -130,13 +130,13 @@ public static class TrapOwnership
 
             if (isTrap)
             {
-                lock (_lock) { _ownerByPos[change.pos] = entityId; }
+                lock (_lock) { _ownerByPos[change.blockValueRef.BlockPosition] = entityId; }
                 if (TrapAttribution.Debug)
-                    Log.Out($"[KitsuneTrapXP.debug] Tracked trap placement: {block.GetBlockName()} at {change.pos} by entity {entityId}");
+                    Log.Out($"[KitsuneTrapXP.debug] Tracked trap placement: {block.GetBlockName()} at {change.blockValueRef.BlockPosition} by entity {entityId}");
             }
             else
             {
-                lock (_lock) { _ownerByPos.Remove(change.pos); }
+                lock (_lock) { _ownerByPos.Remove(change.blockValueRef.BlockPosition); }
             }
         }
     }
