@@ -13,9 +13,10 @@ using HarmonyLib;
 /// We also set entityThatKilledMe so vanilla's own kill log + AwardKill flow sees correct
 /// attribution (harmless if redundant with our package, catches any code paths we missed).
 ///
-/// AE bonus: read from ElectricalTrapXP cvar on the owner's buffs. Baseline 1.0 + bonus.
-/// progression.xml patch raises the cvar to 0.2/0.4/0.6/0.8/1.0 for the 5 AE ranks, so
-/// rank 0 gets 100% XP, rank 5 gets 200% XP (double).
+/// Award = zombie XP * (baseline + AE bonus). The baseline is TrapXPConfig.Baseline
+/// (Settings.xml, default 1.0 = 100%). The AE bonus is read from the ElectricalTrapXP
+/// cvar on the owner's buffs; progression.xml raises it to 0.2/0.4/0.6/0.8/1.0 for the
+/// 5 AE ranks, so at the default baseline rank 0 gets 100% and rank 5 gets 200%.
 /// </summary>
 public static class TrapXPAward
 {
@@ -56,7 +57,7 @@ public static class TrapXPAward
             // Baseline 100% + AE bonus.
             float aeBonus = 0f;
             try { aeBonus = owner.Buffs.GetCustomVar(AECvar); } catch { aeBonus = 0f; }
-            float xpMultiplier = 1.0f + aeBonus;
+            float xpMultiplier = TrapXPConfig.Baseline + aeBonus;
 
             int baseXp = EntityClass.list[__instance.entityClass].ExperienceValue;
             int awarded = (int)(baseXp * xpMultiplier + 0.5f);

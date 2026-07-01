@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+	KitsuneTrapXP settings (server-side).
+
+	baseline = the share of a zombie's XP a trap kill awards the trap owner,
+	as a fraction:
+	    1.0  = 100% (default, unchanged from previous versions)
+	    0.5  = 50%
+	    0.25 = 25%
+	    0    = none (Advanced Engineering bonus only)
+
+	Advanced Engineering's bonus (see Config/progression.xml) still stacks on
+	top of this. Example: baseline 0.25 with AE rank 5 (+100%) = 125% total.
+
+	Edit the number below and restart the server. If this file is missing or the
+	value can't be read, the mod falls back to 1.0 (100%).
+-->
+<KitsuneTrapXP baseline="1.0" />
