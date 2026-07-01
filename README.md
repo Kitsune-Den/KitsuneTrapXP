@@ -32,6 +32,16 @@ No more feeling like you're getting robbed on your own horde night.
 
 Done. Clients can connect normally, they don't need the mod.
 
+## Configuring the XP amount
+
+By default a trap kill awards the owner **100%** of the zombie's XP. If that feels too generous, edit `Settings.xml` in the mod folder and restart the server:
+
+```xml
+<KitsuneTrapXP baseline="1.0" />
+```
+
+`baseline` is the share awarded, as a fraction: `1.0` = 100%, `0.5` = 50%, `0.25` = 25%, `0` = none. Advanced Engineering's bonus still stacks on top (see `Config/progression.xml`), so for example `baseline="0.25"` with AE rank 5 (+100%) gives 125% total. If the file is missing or the value can't be read, it falls back to 100%, so existing setups are unchanged.
+
 ## What it does
 
 Under the hood it's four Harmony patches and one XML tweak:

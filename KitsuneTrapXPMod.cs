@@ -13,6 +13,10 @@ public class KitsuneTrapXPMod : IModApi
 {
     public void InitMod(Mod _modInstance)
     {
+        // Read Settings.xml (baseline XP %) before patching so the value is ready
+        // the first time a trap kill lands.
+        TrapXPConfig.Load(_modInstance.Path);
+
         var harmony = new Harmony("com.adainthelab.kitsunetrapxp");
 
         // Track block placements so we know who owns each spike/barbed-fence block.
@@ -28,6 +32,6 @@ public class KitsuneTrapXPMod : IModApi
         // party members get their share via vanilla SharedKillServer.
         TrapXPAward.RegisterPatches(harmony);
 
-        Log.Out("[KitsuneTrapXP] Loaded - trap kills give 100% XP baseline, Advanced Engineering adds bonus.");
+        Log.Out($"[KitsuneTrapXP] Loaded - trap kills give {TrapXPConfig.Baseline:P0} XP baseline (edit Settings.xml to change), Advanced Engineering adds bonus.");
     }
 }
