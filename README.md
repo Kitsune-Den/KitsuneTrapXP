@@ -9,7 +9,7 @@
 
 ![KitsuneTrapXP](kitsune-trap-xp.jpg)
 
-**Trap kills give 100% XP to the trap owner. No perk required. Party-shared. For 7 Days to Die 3.0.**
+**Trap kills give 100% XP to the trap owner. No perk required. Party-shared. For 7 Days to Die 3.0 – 3.2.**
 
 Here's the thing: you spend all week gathering materials, building your horde base, laying spike trap corridors and blade trap kill rooms. Horde night comes. The traps work beautifully. Zombies die by the dozen. And you get... zero XP from most of them.
 
@@ -21,7 +21,7 @@ No more feeling like you're getting robbed on your own horde night.
 
 ## Requirements
 
-- 7 Days to Die V3.0 (Dead Hot Summer)
+- 7 Days to Die V3.0 – V3.2 (verified against V3.2.0 experimental)
 - **Server-side only.** Install on the server (or in single player). Clients don't need anything.
 - **EAC must be off** on the server. This is a Harmony DLL mod and EAC blocks those.
 
@@ -46,7 +46,7 @@ By default a trap kill awards the owner **100%** of the zombie's XP. If that fee
 
 Under the hood it's four Harmony patches and one XML tweak:
 
-- **Block placement tracking** ~ `GameManager.ChangeBlocks` postfix + `NetPackageSetBlock.ProcessPackage` prefix (belt-and-suspenders). When you place a spike trap, barbed fence, or any other trap block, the mod records your entity ID as the owner at that block position. Tile-entity traps (blade, dart, turrets) already track their own owner in vanilla, so those read directly at kill time.
+- **Block placement tracking** ~ `GameManager.ChangeBlocks` postfix + `NetPackageSetBlock.ProcessPackage` prefix (belt-and-suspenders). When you place a spike trap, barbed fence, landmine, or any other trap block, the mod records your entity ID as the owner at that block position. Landmines carry their own `Mine` block tag (they aren't tagged `trapsSkill` like the rest), so the tracker watches both tags. Tile-entity traps (blade, dart, turrets) already track their own owner in vanilla, so those read directly at kill time.
 - **Damage attribution** ~ `EntityAlive.DamageEntity` prefix. When a zombie takes damage from a trap block, the mod stamps it with the trap owner's entity ID. Last trap to hit wins if multiple people's traps damaged the same zombie.
 - **XP on death** ~ `EntityAlive.OnEntityDeath` prefix. When a stamped zombie dies, the mod sends a `NetPackageSharedPartyKill` to the owner's client with `ExperienceValue × (1.0 + AE_bonus)`. That's the package vanilla uses for party-shared XP, and it's the only packet wired to animate the XP bar + pop the "+N XP" tooltip client-side. Party members within range get their share too via vanilla's `SharedKillServer`.
 - **XML patch** ~ Advanced Engineering's `ElectricalTrapXP` cvar values change from `.15/.3/.45/.6/.75` to `.2/.4/.6/.8/1.0`. Rank 0 = +0% (100% total), rank 5 = +100% (200% total, aka double XP).

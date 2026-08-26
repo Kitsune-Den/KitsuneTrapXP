@@ -14,6 +14,13 @@ public static class TrapOwnership
     // Block tag applied to all trap-like blocks in vanilla (blocks.xml uses "trapsSkill").
     private const string TrapsTag = "trapsSkill";
 
+    // Landmines (mineCandyTin, mineHubcap, mineCookingPot, mineAirFilter + variants)
+    // carry a landmine-exclusive "Mine" tag. They kill via explosion, and the
+    // explosion stamps the victim's DamageSource.BlockPosition with the mine's own
+    // block position, so once we track the placement here, ResolveTrapOwner maps
+    // the kill back to whoever placed the mine.
+    private const string MineTag = "Mine";
+
     private static readonly Dictionary<Vector3i, int> _ownerByPos = new Dictionary<Vector3i, int>();
     private static readonly object _lock = new object();
 
@@ -168,6 +175,7 @@ public static class TrapOwnership
         // future trap blocks TFP decides to tag. Tile-entity traps are read directly via
         // TileEntityPoweredMeleeTrap/RangedTrap at attribution time so they don't strictly
         // need to hit this tracker, but catching them here is harmless defense-in-depth.
-        return block.HasAnyFastTags(FastTags<TagGroup.Global>.Parse(TrapsTag));
+        return block.HasAnyFastTags(FastTags<TagGroup.Global>.Parse(TrapsTag))
+            || block.HasAnyFastTags(FastTags<TagGroup.Global>.Parse(MineTag));
     }
 }
