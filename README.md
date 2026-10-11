@@ -9,7 +9,7 @@
 
 ![KitsuneTrapXP](kitsune-trap-xp.jpg)
 
-**Trap kills give 100% XP to the trap owner. No perk required. Party-shared. For 7 Days to Die 3.0 – 3.2.**
+**Trap kills give 100% XP to the trap owner. No perk required. Party-shared. For 7 Days to Die 3.0 – 3.3.**
 
 Here's the thing: you spend all week gathering materials, building your horde base, laying spike trap corridors and blade trap kill rooms. Horde night comes. The traps work beautifully. Zombies die by the dozen. And you get... zero XP from most of them.
 
@@ -21,7 +21,7 @@ No more feeling like you're getting robbed on your own horde night.
 
 ## Requirements
 
-- 7 Days to Die V3.0 – V3.2 (verified against V3.2.0 experimental)
+- 7 Days to Die V3.0 – V3.3 (verified against V3.2.0 experimental; on V3.3.0 every patch target and game reference checks out statically)
 - **Server-side only.** Install on the server (or in single player). Clients don't need anything.
 - **EAC must be off** on the server. This is a Harmony DLL mod and EAC blocks those.
 
