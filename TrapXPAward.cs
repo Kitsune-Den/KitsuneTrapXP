@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using HarmonyLib;
 
 /// <summary>
@@ -22,8 +23,26 @@ public static class TrapXPAward
 {
     private const string AECvar = "ElectricalTrapXP";
 
+    // Zombies we've already paid out for. Vanilla's AwardKillXPServer runs right after
+    // OnEntityDeath and, for bTrapKillXP sources (turrets, blade, dart), pays
+    // ExperienceValue * ElectricalTrapXP on its own. Our award already includes the AE
+    // bonus, so we skip vanilla's for these kills to avoid paying the bonus twice.
+    private static readonly HashSet<int> _awardedKills = new HashSet<int>();
+    private static readonly object _lock = new object();
+
     public static void RegisterPatches(Harmony harmony)
     {
+        var ak = AccessTools.Method(typeof(EntityAlive), "AwardKillXPServer");
+        if (ak != null)
+        {
+            harmony.Patch(ak, prefix: new HarmonyMethod(
+                AccessTools.Method(typeof(TrapXPAward), nameof(AwardKillXPServerPrefix))));
+        }
+        else
+        {
+            Log.Warning("[KitsuneTrapXP] EntityAlive.AwardKillXPServer not found - electrical trap kills may also get vanilla's AE XP on top.");
+        }
+
         var m = AccessTools.Method(typeof(EntityAlive), "OnEntityDeath");
         if (m != null)
         {
@@ -96,6 +115,8 @@ public static class TrapXPAward
                         _onlyClientsAttachedToAnEntity: true,
                         _attachedToEntityId: owner.entityId);
                 }
+
+                lock (_lock) { _awardedKills.Add(__instance.entityId); }
             }
             catch (System.Exception ex)
             {
@@ -115,6 +136,15 @@ public static class TrapXPAward
         catch (System.Exception ex)
         {
             Log.Warning($"[KitsuneTrapXP] OnEntityDeathPrefix failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>Skip vanilla's kill XP for zombies we already awarded in OnEntityDeathPrefix.</summary>
+    public static bool AwardKillXPServerPrefix(EntityAlive __instance)
+    {
+        lock (_lock)
+        {
+            return !_awardedKills.Remove(__instance.entityId);
         }
     }
 }
