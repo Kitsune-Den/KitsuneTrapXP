@@ -29,6 +29,21 @@ public static class TrapAttribution
         {
             Log.Warning("[KitsuneTrapXP] EntityAlive.DamageEntity not found - trap attribution disabled.");
         }
+
+        // Damage dealt on a client reaches the server as NetPackageDamageEntity, which calls
+        // ProcessDamageResponse and never goes through DamageEntity. The case that matters:
+        // while a client has a turret's menu open, that client runs the turret's fire logic.
+        var pdr = AccessTools.Method(typeof(EntityAlive), "ProcessDamageResponse",
+            new[] { typeof(DamageResponse) });
+        if (pdr != null)
+        {
+            harmony.Patch(pdr, prefix: new HarmonyMethod(
+                AccessTools.Method(typeof(TrapAttribution), nameof(ProcessDamageResponsePrefix))));
+        }
+        else
+        {
+            Log.Warning("[KitsuneTrapXP] EntityAlive.ProcessDamageResponse not found - kills from client-run turrets won't be attributed.");
+        }
     }
 
     // Diagnostic logging toggle. Flip to true to spam the log with per-damage-tick info
@@ -37,6 +52,17 @@ public static class TrapAttribution
     public const bool Debug = false;
 
     public static void DamageEntityPrefix(EntityAlive __instance, DamageSource _damageSource)
+    {
+        Stamp(__instance, _damageSource);
+    }
+
+    public static void ProcessDamageResponsePrefix(EntityAlive __instance, DamageResponse _dmResponse)
+    {
+        if (__instance == null || __instance.world == null || __instance.world.IsRemote()) return;
+        Stamp(__instance, _dmResponse.Source);
+    }
+
+    private static void Stamp(EntityAlive __instance, DamageSource _damageSource)
     {
         try
         {
@@ -69,7 +95,7 @@ public static class TrapAttribution
         }
         catch (System.Exception ex)
         {
-            Log.Warning($"[KitsuneTrapXP] DamageEntityPrefix failed: {ex.Message}");
+            Log.Warning($"[KitsuneTrapXP] Trap attribution failed: {ex.Message}");
         }
     }
 
