@@ -82,6 +82,16 @@ public static class TrapAttribution
         var world = GameManager.Instance?.World;
         if (world == null) return -1;
 
+        // 0. Electrical traps that shoot or swing (auto/shotgun turrets, blade trap, dart trap)
+        // deal damage via ItemActionAttack.Hit / BlockProjectileMoveScript, which never set
+        // BlockPosition. They flag the source bTrapKillXP and pass the trap owner as the
+        // attacker entity instead, so read the owner from there.
+        if (src.bTrapKillXP)
+        {
+            var attackerId = src.getEntityId();
+            return world.GetEntity(attackerId) is EntityPlayer ? attackerId : -1;
+        }
+
         var blockPos = src.BlockPosition;
         if (blockPos == Vector3i.zero) return -1;
 
