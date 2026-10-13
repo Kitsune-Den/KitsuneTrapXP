@@ -44,11 +44,11 @@ By default a trap kill awards the owner **100%** of the zombie's XP. If that fee
 
 ## What it does
 
-Under the hood it's four Harmony patches and one XML tweak:
+Under the hood it's a handful of Harmony patches and one XML tweak:
 
 - **Block placement tracking** ~ `GameManager.ChangeBlocks` postfix + `NetPackageSetBlock.ProcessPackage` prefix (belt-and-suspenders). When you place a spike trap, barbed fence, landmine, or any other trap block, the mod records your entity ID as the owner at that block position. Landmines carry their own `Mine` block tag (they aren't tagged `trapsSkill` like the rest), so the tracker watches both tags. Blade traps, dart traps and turrets don't need the tracker: vanilla already passes the trap owner as the attacker on their damage (flagged `bTrapKillXP`), so the mod reads the owner straight off the hit.
-- **Damage attribution** ~ `EntityAlive.DamageEntity` prefix. When a zombie takes damage from a trap block, the mod stamps it with the trap owner's entity ID. Last trap to hit wins if multiple people's traps damaged the same zombie.
-- **XP on death** ~ `EntityAlive.OnEntityDeath` prefix. When a stamped zombie dies, the mod sends a `NetPackageSharedPartyKill` to the owner's client with `ExperienceValue × (1.0 + AE_bonus)`. That's the package vanilla uses for party-shared XP, and it's the only packet wired to animate the XP bar + pop the "+N XP" tooltip client-side. Party members within range get their share too via vanilla's `SharedKillServer`.
+- **Damage attribution** ~ `EntityAlive.DamageEntity` prefix, plus `EntityAlive.ProcessDamageResponse` for damage that arrives from a client (a turret fires from the client of whoever has its menu open). When a zombie takes damage from a trap, the mod stamps it with the trap owner's entity ID. Last trap to hit wins if multiple people's traps damaged the same zombie.
+- **XP on death** ~ `EntityAlive.OnEntityDeath` prefix. When a stamped zombie dies, the mod sends a `NetPackageSharedPartyKill` to the owner's client with `ExperienceValue × (1.0 + AE_bonus)`. That's the package vanilla uses for party-shared XP, and it's the only packet wired to animate the XP bar + pop the "+N XP" tooltip client-side. Party members within range get their share too via vanilla's `SharedKillServer`. Vanilla's own `AwardKillXPServer` is skipped for these kills so the AE bonus isn't paid twice.
 - **XML patch** ~ Advanced Engineering's `ElectricalTrapXP` cvar values change from `.15/.3/.45/.6/.75` to `.2/.4/.6/.8/1.0`. Rank 0 = +0% (100% total), rank 5 = +100% (200% total, aka double XP).
 
 ## What it does NOT do
