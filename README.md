@@ -61,3 +61,7 @@ Under the hood it's a handful of Harmony patches and one XML tweak:
 There's another mod on Nexus that partially addresses this, but it kept the perk as a gate and just added a scale factor on top. This mod takes the different philosophical stance: **trap kills should give XP, period.** The perk makes it give *more*.
 
 Made by AdaInTheLab.
+
+## License
+
+[CC BY-NC-SA 4.0](LICENSE), with an extra permission for servers that make money: see [NOTICE.md](NOTICE.md). In short: play it, change it and share it, with credit, not for sale, and with changed versions under the same license.
