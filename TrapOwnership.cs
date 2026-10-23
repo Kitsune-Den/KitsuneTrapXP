@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.IO;
+using System.Text;
 using HarmonyLib;
 
 /// <summary>
@@ -8,6 +10,10 @@ using HarmonyLib;
 /// Tile-entity traps (blade trap, dart trap, turrets) already have their own ownerID
 /// on the tile entity itself, so we don't track those here - we read them directly
 /// via TileEntityPoweredMeleeTrap.GetOwner() at award time.
+///
+/// Owners are stored as the player's persistent id (not the entity id, which changes
+/// every session) and saved to KitsuneTrapXP-owners.txt in the save folder whenever the
+/// world saves, so traps keep paying their owner after a server restart.
 /// </summary>
 public static class TrapOwnership
 {
@@ -21,11 +27,34 @@ public static class TrapOwnership
     // the kill back to whoever placed the mine.
     private const string MineTag = "Mine";
 
-    private static readonly Dictionary<Vector3i, int> _ownerByPos = new Dictionary<Vector3i, int>();
+    private const string OwnersFileName = "KitsuneTrapXP-owners.txt";
+
+    private static readonly Dictionary<Vector3i, PlatformUserIdentifierAbs> _ownerByPos = new Dictionary<Vector3i, PlatformUserIdentifierAbs>();
     private static readonly object _lock = new object();
+
+    // Save folder of the world the map was loaded for. Pinned at load rather than looked
+    // up at save time, so a save that lands while another world is starting up can never
+    // write this world's owners into that world's folder.
+    private static string _saveDir;
+    private static bool _dirty;
 
     public static void RegisterPatches(Harmony harmony)
     {
+        // Load the saved owners once the world is up, and write them whenever the world
+        // saves. World.Save runs on the periodic autosave, the pause menu, and during
+        // shutdown (after WorldShuttingDown fires, so the map must not be cleared there).
+        ModEvents.GameStartDone.RegisterHandler(OnGameStartDone);
+        var save = AccessTools.Method(typeof(World), "Save");
+        if (save != null)
+        {
+            harmony.Patch(save, postfix: new HarmonyMethod(
+                AccessTools.Method(typeof(TrapOwnership), nameof(WorldSavePostfix))));
+        }
+        else
+        {
+            Log.Warning("[KitsuneTrapXP] World.Save not found - trap owners won't survive a restart.");
+        }
+
         // Primary hook: GameManager.ChangeBlocks — deepest funnel for all block changes on
         // the server side. Player-placed blocks arrive as NetPackageSetBlock → ChangeBlocks.
         // BlockChangeInfo carries changedByEntityId + pos + blockValue natively.
@@ -107,20 +136,19 @@ public static class TrapOwnership
     {
         if (changes == null) return;
 
-        int fallbackEntityId = -1;
-        var gm = GameManager.Instance;
-        if (gm != null && persistentPlayerId != null)
-        {
-            var ppd = gm.GetPersistentPlayerList()?.GetPlayerData(persistentPlayerId);
-            if (ppd != null) fallbackEntityId = ppd.EntityId;
-        }
+        var players = GameManager.Instance?.GetPersistentPlayerList();
+        if (players == null) return;
+
+        PlatformUserIdentifierAbs fallbackOwner = null;
+        if (persistentPlayerId != null)
+            fallbackOwner = players.GetPlayerData(persistentPlayerId)?.PrimaryId;
 
         foreach (var change in changes)
         {
             if (TrapAttribution.Debug)
             {
                 var bName = change.blockValue.Block?.GetBlockName() ?? "null";
-                Log.Out($"[KitsuneTrapXP.debug]   change: pos={change.blockValueRef.BlockPosition} block={bName} bChangeBlockValue={change.bChangeBlockValue} changedByEntityId={change.changedByEntityId} fallback={fallbackEntityId}");
+                Log.Out($"[KitsuneTrapXP.debug]   change: pos={change.blockValueRef.BlockPosition} block={bName} bChangeBlockValue={change.bChangeBlockValue} changedByEntityId={change.changedByEntityId} fallback={fallbackOwner?.CombinedString ?? "null"}");
             }
 
             if (!change.bChangeBlockValue) continue;
@@ -128,8 +156,13 @@ public static class TrapOwnership
             var block = change.blockValue.Block;
             if (block == null) continue;
 
-            var entityId = change.changedByEntityId > 0 ? change.changedByEntityId : fallbackEntityId;
-            if (entityId <= 0) continue;
+            // Only players own traps. A change made by anything else (a zombie wearing a
+            // spike down a stage, a block falling) leaves the recorded owner alone.
+            PlatformUserIdentifierAbs owner = null;
+            if (change.changedByEntityId > 0)
+                owner = players.GetPlayerDataFromEntityID(change.changedByEntityId)?.PrimaryId;
+            if (owner == null) owner = fallbackOwner;
+            if (owner == null) continue;
 
             var isTrap = IsTrapBlock(block);
             if (TrapAttribution.Debug)
@@ -137,22 +170,121 @@ public static class TrapOwnership
 
             if (isTrap)
             {
-                lock (_lock) { _ownerByPos[change.blockValueRef.BlockPosition] = entityId; }
+                lock (_lock) { _ownerByPos[change.blockValueRef.BlockPosition] = owner; _dirty = true; }
                 if (TrapAttribution.Debug)
-                    Log.Out($"[KitsuneTrapXP.debug] Tracked trap placement: {block.GetBlockName()} at {change.blockValueRef.BlockPosition} by entity {entityId}");
+                    Log.Out($"[KitsuneTrapXP.debug] Tracked trap placement: {block.GetBlockName()} at {change.blockValueRef.BlockPosition} by {owner.CombinedString}");
             }
             else
             {
-                lock (_lock) { _ownerByPos.Remove(change.blockValueRef.BlockPosition); }
+                lock (_lock) { if (_ownerByPos.Remove(change.blockValueRef.BlockPosition)) _dirty = true; }
             }
         }
     }
 
+    /// <summary>Entity id of the trap's owner, or -1 if nobody owns it or the owner is offline.</summary>
     public static int GetOwnerEntityId(Vector3i pos)
+    {
+        PlatformUserIdentifierAbs owner;
+        lock (_lock)
+        {
+            if (!_ownerByPos.TryGetValue(pos, out owner)) return -1;
+        }
+        var ppd = GameManager.Instance?.GetPersistentPlayerList()?.GetPlayerData(owner);
+        return ppd != null ? ppd.EntityId : -1;
+    }
+
+    private static void OnGameStartDone(ref ModEvents.SGameStartDoneData _data)
     {
         lock (_lock)
         {
-            return _ownerByPos.TryGetValue(pos, out var id) ? id : -1;
+            _ownerByPos.Clear();
+            _dirty = false;
+            _saveDir = null;
+        }
+
+        // Only the server (dedicated, or the host in single player) tracks traps.
+        if (!SingletonMonoBehaviour<ConnectionManager>.Instance.IsServer) return;
+
+        try
+        {
+            var dir = GameIO.GetSaveGameDir();
+            var path = Path.Combine(dir, OwnersFileName);
+            int loaded = 0, skipped = 0;
+            if (File.Exists(path))
+            {
+                foreach (var line in File.ReadAllLines(path))
+                {
+                    // x y z <tab> combined player id
+                    var tab = line.IndexOf('\t');
+                    if (tab <= 0) { skipped++; continue; }
+                    var xyz = line.Substring(0, tab).Split(' ');
+                    if (xyz.Length != 3
+                        || !int.TryParse(xyz[0], out var x)
+                        || !int.TryParse(xyz[1], out var y)
+                        || !int.TryParse(xyz[2], out var z)
+                        || !PlatformUserIdentifierAbs.TryFromCombinedString(line.Substring(tab + 1), out var owner)
+                        || owner == null)
+                    {
+                        skipped++;
+                        continue;
+                    }
+                    lock (_lock) { _ownerByPos[new Vector3i(x, y, z)] = owner; }
+                    loaded++;
+                }
+            }
+            lock (_lock) { _saveDir = dir; }
+            Log.Out($"[KitsuneTrapXP] Loaded {loaded} trap owner(s) from {OwnersFileName}" +
+                    (skipped > 0 ? $" ({skipped} unreadable line(s) skipped)." : "."));
+        }
+        catch (System.Exception ex)
+        {
+            Log.Warning($"[KitsuneTrapXP] Failed to load {OwnersFileName} ({ex.Message}); trap owners start empty.");
+            lock (_lock) { _saveDir = GameIO.GetSaveGameDir(); }
+        }
+    }
+
+    public static void WorldSavePostfix(World __instance)
+    {
+        try
+        {
+            string dir;
+            lock (_lock) { dir = _saveDir; }
+            if (dir == null) return;
+
+            // Forget traps that are gone. A zombie that wrecks a spike changes the block with
+            // no player attached, so RecordPlacements never sees it; check what is actually
+            // there now, for the chunks that are loaded.
+            var lines = new StringBuilder();
+            lock (_lock)
+            {
+                var gone = new List<Vector3i>();
+                foreach (var kv in _ownerByPos)
+                {
+                    if (__instance.GetChunkFromWorldPos(kv.Key) != null
+                        && !IsTrapBlock(__instance.GetBlock(kv.Key).Block))
+                        gone.Add(kv.Key);
+                }
+                foreach (var pos in gone) _ownerByPos.Remove(pos);
+                if (gone.Count > 0) _dirty = true;
+                if (!_dirty) return;
+
+                foreach (var kv in _ownerByPos)
+                    lines.Append(kv.Key.x).Append(' ').Append(kv.Key.y).Append(' ').Append(kv.Key.z)
+                         .Append('\t').Append(kv.Value.CombinedString).Append('\n');
+                _dirty = false;
+            }
+
+            // Write to a temp file and swap it in, so a crash mid-write can't leave half a file.
+            var path = Path.Combine(dir, OwnersFileName);
+            var tmp = path + ".tmp";
+            File.WriteAllText(tmp, lines.ToString());
+            if (File.Exists(path)) File.Replace(tmp, path, null);
+            else File.Move(tmp, path);
+        }
+        catch (System.Exception ex)
+        {
+            lock (_lock) { _dirty = true; }
+            Log.Warning($"[KitsuneTrapXP] Failed to save {OwnersFileName}: {ex.Message}");
         }
     }
 
