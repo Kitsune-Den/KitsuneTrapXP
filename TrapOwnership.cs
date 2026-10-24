@@ -148,7 +148,7 @@ public static class TrapOwnership
             if (TrapAttribution.Debug)
             {
                 var bName = change.blockValue.Block?.GetBlockName() ?? "null";
-                Log.Out($"[KitsuneTrapXP.debug]   change: pos={change.blockValueRef.BlockPosition} block={bName} bChangeBlockValue={change.bChangeBlockValue} changedByEntityId={change.changedByEntityId} fallback={fallbackOwner?.CombinedString ?? "null"}");
+                Log.Out($"[KitsuneTrapXP.debug]   change: pos={PosOf(change)} block={bName} bChangeBlockValue={change.bChangeBlockValue} changedByEntityId={change.changedByEntityId} fallback={fallbackOwner?.CombinedString ?? "null"}");
             }
 
             if (!change.bChangeBlockValue) continue;
@@ -170,15 +170,25 @@ public static class TrapOwnership
 
             if (isTrap)
             {
-                lock (_lock) { _ownerByPos[change.blockValueRef.BlockPosition] = owner; _dirty = true; }
+                lock (_lock) { _ownerByPos[PosOf(change)] = owner; _dirty = true; }
                 if (TrapAttribution.Debug)
-                    Log.Out($"[KitsuneTrapXP.debug] Tracked trap placement: {block.GetBlockName()} at {change.blockValueRef.BlockPosition} by {owner.CombinedString}");
+                    Log.Out($"[KitsuneTrapXP.debug] Tracked trap placement: {block.GetBlockName()} at {PosOf(change)} by {owner.CombinedString}");
             }
             else
             {
-                lock (_lock) { if (_ownerByPos.Remove(change.blockValueRef.BlockPosition)) _dirty = true; }
+                lock (_lock) { if (_ownerByPos.Remove(PosOf(change))) _dirty = true; }
             }
         }
+    }
+
+    // V3.0 moved the changed block's position into BlockChangeInfo.blockValueRef; 2.6 keeps it in pos.
+    private static Vector3i PosOf(BlockChangeInfo change)
+    {
+#if V26
+        return change.pos;
+#else
+        return change.blockValueRef.BlockPosition;
+#endif
     }
 
     /// <summary>Entity id of the trap's owner, or -1 if nobody owns it or the owner is offline.</summary>

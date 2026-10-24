@@ -1,6 +1,8 @@
 bin/
 obj/
 7dtd-binaries/
+7dtd-binaries-2.6/
+dist/
 .idea/
 .vs/
 .vscode/

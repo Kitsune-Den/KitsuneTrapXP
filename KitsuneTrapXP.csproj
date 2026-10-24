@@ -1,4 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Two game targets from one source:
+      dotnet build                         V3.x, references 7dtd-binaries\, DLL lands in KitsuneTrapXP\
+      dotnet build -p:GameVersion=2.6      V2.6, references 7dtd-binaries-2.6\, defines V26,
+                                           full mod folder lands in dist\v2.6\KitsuneTrapXP\
+  -->
+  <PropertyGroup>
+    <GameVersion Condition="'$(GameVersion)' == ''">3</GameVersion>
+    <GameBinaries>7dtd-binaries</GameBinaries>
+  </PropertyGroup>
+
   <PropertyGroup>
     <OutputType>Library</OutputType>
     <TargetFramework>net48</TargetFramework>
@@ -11,34 +22,57 @@
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(GameVersion)' == '2.6'">
+    <GameBinaries>7dtd-binaries-2.6</GameBinaries>
+    <DefineConstants>$(DefineConstants);V26</DefineConstants>
+    <OutputPath>bin\v2.6\</OutputPath>
+    <IntermediateOutputPath>obj\v2.6\</IntermediateOutputPath>
+  </PropertyGroup>
+
   <ItemGroup>
+    <!-- Keep the game DLL folders out of the default None glob, or MSBuild resolves references
+         from whichever folder sorts first instead of the HintPath. -->
+    <None Remove="7dtd-binaries*\**;dist\**" />
     <Reference Include="Assembly-CSharp">
-      <HintPath>7dtd-binaries\Assembly-CSharp.dll</HintPath>
+      <HintPath>$(GameBinaries)\Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Assembly-CSharp-firstpass">
-      <HintPath>7dtd-binaries\Assembly-CSharp-firstpass.dll</HintPath>
+      <HintPath>$(GameBinaries)\Assembly-CSharp-firstpass.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine">
-      <HintPath>7dtd-binaries\UnityEngine.dll</HintPath>
+      <HintPath>$(GameBinaries)\UnityEngine.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>7dtd-binaries\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath>$(GameBinaries)\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="0Harmony">
-      <HintPath>7dtd-binaries\0Harmony.dll</HintPath>
+      <HintPath>$(GameBinaries)\0Harmony.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="LogLibrary">
-      <HintPath>7dtd-binaries\LogLibrary.dll</HintPath>
+      <HintPath>$(GameBinaries)\LogLibrary.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
 
-  <Target Name="CopyToModFolder" AfterTargets="Build">
+  <Target Name="CopyToModFolder" AfterTargets="Build" Condition="'$(GameVersion)' != '2.6'">
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(MSBuildProjectDirectory)\KitsuneTrapXP" />
+  </Target>
+
+  <!-- The 2.6 build gets its own complete mod folder (same ModInfo, Settings and Config). -->
+  <Target Name="CopyToV26ModFolder" AfterTargets="Build" Condition="'$(GameVersion)' == '2.6'">
+    <PropertyGroup>
+      <V26ModDir>$(MSBuildProjectDirectory)\dist\v2.6\KitsuneTrapXP</V26ModDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <V26ModFiles Include="KitsuneTrapXP\**\*" Exclude="KitsuneTrapXP\KitsuneTrapXP.dll" />
+    </ItemGroup>
+    <RemoveDir Directories="$(V26ModDir)" />
+    <Copy SourceFiles="@(V26ModFiles)" DestinationFiles="@(V26ModFiles->'$(V26ModDir)\%(RecursiveDir)%(Filename)%(Extension)')" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(V26ModDir)" />
   </Target>
 </Project>
