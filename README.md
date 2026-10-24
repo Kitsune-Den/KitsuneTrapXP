@@ -9,7 +9,7 @@
 
 ![KitsuneTrapXP](kitsune-trap-xp.jpg)
 
-**Trap kills give 100% XP to the trap owner. No perk required. Party-shared. For 7 Days to Die 3.0 – 3.3.**
+**Trap kills give 100% XP to the trap owner. No perk required. Party-shared. For 7 Days to Die 3.0 – 3.3, plus a separate build for V2.6.**
 
 Here's the thing: you spend all week gathering materials, building your horde base, laying spike trap corridors and blade trap kill rooms. Horde night comes. The traps work beautifully. Zombies die by the dozen. And you get... zero XP from most of them.
 
@@ -22,6 +22,7 @@ No more feeling like you're getting robbed on your own horde night.
 ## Requirements
 
 - 7 Days to Die V3.0 – V3.3 (verified against V3.2.0 experimental; on V3.3.0 every patch target and game reference checks out statically)
+- Still on **V2.6**? Use the V2.6 build instead (see [V2.6 build](#v26-build) below). The regular build does not work on 2.6.
 - **Server-side only.** Install on the server (or in single player). Clients don't need anything.
 - **EAC must be off** on the server. This is a Harmony DLL mod and EAC blocks those.
 
@@ -41,6 +42,12 @@ By default a trap kill awards the owner **100%** of the zombie's XP. If that fee
 ```
 
 `baseline` is the share awarded, as a fraction: `1.0` = 100%, `0.5` = 50%, `0.25` = 25%, `0` = none. Advanced Engineering's bonus still stacks on top (see `Config/progression.xml`), so for example `baseline="0.25"` with AE rank 5 (+100%) gives 125% total. If the file is missing or the value can't be read, it falls back to 100%, so existing setups are unchanged.
+
+## V2.6 build
+
+V2.6 has the same features (configurable baseline, landmines, turrets, blade and dart traps, saved trap owners), built against the 2.6 game files. Install it the same way, from the V2.6 zip. One difference: on 2.6, a turret kill made while another player has that turret's menu open isn't credited to the owner, because 2.6 doesn't mark that damage as coming from a trap. Every other trap kill works as on 3.x.
+
+To build it, put the 2.6 game DLLs in `7dtd-binaries-2.6/` (same files as `7dtd-binaries/`, with `0Harmony.dll` from `Mods/0_TFP_Harmony`) and run `dotnet build -c Release -p:GameVersion=2.6`. The complete mod folder lands in `dist/v2.6/KitsuneTrapXP/`.
 
 ## What it does
 
