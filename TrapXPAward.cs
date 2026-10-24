@@ -15,14 +15,13 @@ using HarmonyLib;
 /// attribution (harmless if redundant with our package, catches any code paths we missed).
 ///
 /// Award = zombie XP * (baseline + AE bonus). The baseline is TrapXPConfig.Baseline
-/// (Settings.xml, default 1.0 = 100%). The AE bonus is read from the ElectricalTrapXP
-/// cvar on the owner's buffs; progression.xml raises it to 0.2/0.4/0.6/0.8/1.0 for the
-/// 5 AE ranks, so at the default baseline rank 0 gets 100% and rank 5 gets 200%.
+/// (Settings.xml, default 1.0 = 100%). The AE bonus is the owner's ElectricalTrapXP
+/// passive effect (not a cvar; nothing sets one by that name); progression.xml raises it
+/// to 0.2/0.4/0.6/0.8/1.0 for the 5 AE ranks, so at the default baseline rank 0 gets
+/// 100% and rank 5 gets 200%.
 /// </summary>
 public static class TrapXPAward
 {
-    private const string AECvar = "ElectricalTrapXP";
-
     // Zombies we've already paid out for. Vanilla's AwardKillXPServer runs right after
     // OnEntityDeath and, for bTrapKillXP sources (turrets, blade, dart), pays
     // ExperienceValue * ElectricalTrapXP on its own. Our award already includes the AE
@@ -78,12 +77,8 @@ public static class TrapXPAward
 
             // Baseline 100% + AE bonus.
             float aeBonus = 0f;
-#if V26
-            // 2.6 has ElectricalTrapXP only as a passive effect; read it the way vanilla does.
+            // Read it the way vanilla does (AwardKillXPServer on 3.x, ItemActionAttack.Hit on 2.6).
             try { aeBonus = EffectManager.GetValue(PassiveEffects.ElectricalTrapXP, owner.inventory.holdingItemItemValue, 0f, owner); } catch { aeBonus = 0f; }
-#else
-            try { aeBonus = owner.Buffs.GetCustomVar(AECvar); } catch { aeBonus = 0f; }
-#endif
             float xpMultiplier = TrapXPConfig.Baseline + aeBonus;
 
             int baseXp = EntityClass.list[__instance.entityClass].ExperienceValue;
