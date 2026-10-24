@@ -44,6 +44,10 @@ public static class TrapAttribution
         {
             Log.Warning("[KitsuneTrapXP] EntityAlive.ProcessDamageResponse not found - kills from client-run turrets won't be attributed.");
         }
+
+#if V26
+        TrapHitContext.RegisterPatches(harmony);
+#endif
     }
 
     // Diagnostic logging toggle. Flip to true to spam the log with per-damage-tick info
@@ -111,8 +115,13 @@ public static class TrapAttribution
         // 0. Electrical traps that shoot or swing (auto/shotgun turrets, blade trap, dart trap)
         // deal damage via ItemActionAttack.Hit / BlockProjectileMoveScript, which never set
         // BlockPosition. They flag the source bTrapKillXP and pass the trap owner as the
-        // attacker entity instead, so read the owner from there.
+        // attacker entity instead, so read the owner from there. 2.6 has no bTrapKillXP;
+        // TrapHitContext tells us we're inside one of those trap calls instead.
+#if V26
+        if (TrapHitContext.Active)
+#else
         if (src.bTrapKillXP)
+#endif
         {
             var attackerId = src.getEntityId();
             return world.GetEntity(attackerId) is EntityPlayer ? attackerId : -1;

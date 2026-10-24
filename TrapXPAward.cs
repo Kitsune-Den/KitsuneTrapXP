@@ -31,6 +31,8 @@ public static class TrapXPAward
 
     public static void RegisterPatches(Harmony harmony)
     {
+#if !V26
+        // 2.6 has no AwardKillXPServer; TrapHitContext skips vanilla's AddKillXP there instead.
         var ak = AccessTools.Method(typeof(EntityAlive), "AwardKillXPServer");
         if (ak != null)
         {
@@ -41,6 +43,7 @@ public static class TrapXPAward
         {
             Log.Warning("[KitsuneTrapXP] EntityAlive.AwardKillXPServer not found - electrical trap kills may also get vanilla's AE XP on top.");
         }
+#endif
 
         var m = AccessTools.Method(typeof(EntityAlive), "OnEntityDeath");
         if (m != null)
@@ -74,7 +77,7 @@ public static class TrapXPAward
 
             // Baseline 100% + AE bonus.
             float aeBonus = 0f;
-            // Read it the way vanilla's AwardKillXPServer does.
+            // Read it the way vanilla does (AwardKillXPServer on 3.x, ItemActionAttack.Hit on 2.6).
             try { aeBonus = EffectManager.GetValue(PassiveEffects.ElectricalTrapXP, owner.inventory.holdingItemItemValue, 0f, owner); } catch { aeBonus = 0f; }
             float xpMultiplier = TrapXPConfig.Baseline + aeBonus;
 
@@ -103,8 +106,12 @@ public static class TrapXPAward
                         Progression.XPTypes.Kill,
                         true,    // useBonus
                         true,    // notifyUI
+#if V26
+                        ownerId);
+#else
                         ownerId,
                         null);   // _itemValue — 7th arg added in v3.0
+#endif
                 }
                 else
                 {
@@ -116,7 +123,11 @@ public static class TrapXPAward
                         _attachedToEntityId: owner.entityId);
                 }
 
+#if V26
+                TrapHitContext.MarkAwarded(__instance.entityId);
+#else
                 lock (_lock) { _awardedKills.Add(__instance.entityId); }
+#endif
             }
             catch (System.Exception ex)
             {
